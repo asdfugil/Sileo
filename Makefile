@@ -143,7 +143,7 @@ ifeq ($(MAC), 1)
 $(SILEO_APP_DIR):
 	@set -o pipefail; \
 		xcodebuild -jobs $(shell sysctl -n hw.ncpu) -project 'Sileo.xcodeproj' -scheme 'Sileo' $(DESTINATION) -configuration $(BUILD_CONFIG) ARCHS=$(ARCH) -derivedDataPath $(SILEOTMP) \
-		archive -archivePath="$(SILEOTMP)/Sileo.xcarchive" DISPLAY_NAME=$(DISPLAY_NAME) \
+		archive -archivePath="$(SILEOTMP)/Sileo.xcarchive" CODE_SIGNING_ALLOWED=NO DISPLAY_NAME=$(DISPLAY_NAME) \
 		DSTROOT=$(SILEOTMP)/install $(XCPRETTY) ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=NO
 else
 $(SILEO_APP_DIR):
