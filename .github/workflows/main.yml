@@ -57,7 +57,7 @@ jobs:
           make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
       - name: Build Sileo Nightly (darwin-arm64)
         run: |
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
+          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64
       - name: Upload to GitHub Artifiacts
         uses: actions/upload-artifact@v2.2.2
         with:
