@@ -134,6 +134,12 @@ class PackageListViewController: SileoViewController, UIGestureRecognizerDelegat
         
         searchController = UISearchController(searchResultsController: nil)
         searchController?.searchBar.placeholder = String(localizationKey: "Package_Search.Placeholder")
+        if #available(iOS 13, *) {
+            searchController?.searchBar.searchTextField.semanticContentAttribute = LanguageHelper.shared.isRtl ? .forceRightToLeft : .forceLeftToRight
+        } else {
+            let textfieldOfSearchBar = searchController?.searchBar.value(forKey: "searchField") as? UITextField
+            textfieldOfSearchBar?.semanticContentAttribute = LanguageHelper.shared.isRtl ? .forceRightToLeft : .forceLeftToRight
+        }
         searchController?.searchBar.delegate = self
         searchController?.searchResultsUpdater = self
         searchController?.obscuresBackgroundDuringPresentation = false
@@ -705,12 +711,26 @@ extension PackageListViewController: UISearchResultsUpdating {
             } else {
                 packages = packageManager.packageList(identifier: self.packagesLoadIdentifier,
                                                       search: query,
-                                                      sortPackages: true,
+                                                      sortPackages: self.packagesLoadIdentifier == "--installed" ? false : true,
                                                       repoContext: self.repoContext,
                                                       lookupTable: self.searchCache)
             }
             
             if self.packagesLoadIdentifier == "--installed" {
+                var allPackages: [String: Package] = [:]
+                _ = packages.map { allPackages[$0.packageID] = $0 }
+                let foundPackages = packageManager.packages(identifiers: Array(allPackages.keys), sorted: false)
+                for package in foundPackages {
+                    guard let existing = allPackages[package.packageID] else { continue }
+                    if existing.version == package.version {
+                        allPackages[package.packageID] = package
+                    } else {
+                        if let correct = package.allVersions.first(where: { $0.version == package.version }) {
+                            allPackages[package.packageID] = correct
+                        }
+                    }
+                }
+                packages = Array(allPackages.values)
                 switch SortMode() {
                 case .installdate:
                     packages = packages.sorted(by: { package1, package2 -> Bool in
@@ -728,7 +748,8 @@ extension PackageListViewController: UISearchResultsUpdating {
                     })
                 case .size:
                     packages = packages.sorted { $0.installedSize ?? 0 > $1.installedSize ?? 0 }
-                default: break
+                case .name:
+                    packages = packageManager.sortPackages(packages: packages, search: query)
                 }
             }
             

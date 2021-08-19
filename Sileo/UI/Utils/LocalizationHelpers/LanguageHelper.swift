@@ -6,7 +6,7 @@
 //  Copyright © 2021 Sileo Team. All rights reserved.
 //
 
-import Foundation
+import UIKit
 
 final public class LanguageHelper {
     
@@ -14,6 +14,7 @@ final public class LanguageHelper {
     public let availableLanguages: [Language]
     public var bundle: Bundle?
     public var locale: Locale?
+    public var isRtl = false
     
     init() {
         var locales = Bundle.main.localizations
@@ -33,8 +34,12 @@ final public class LanguageHelper {
         var selectedLanguage: String
         if UserDefaults.standard.object(forKey: "UseSystemLanguage") == nil {
             UserDefaults.standard.setValue(true, forKey: "UseSystemLanguage")
+            let locale = Locale.current.identifier
+            self.isRtl = Locale.characterDirection(forLanguage: locale) == .rightToLeft
             return
         } else if UserDefaults.standard.bool(forKey: "UseSystemLanguage") {
+            let locale = Locale.current.identifier
+            self.isRtl = Locale.characterDirection(forLanguage: locale) == .rightToLeft
             return
         // swiftlint:disable:next identifier_name
         } else if let _selectedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
@@ -46,8 +51,14 @@ final public class LanguageHelper {
         
         if let path = Bundle.main.path(forResource: selectedLanguage, ofType: "lproj"),
            let bundle = Bundle(path: path) {
-            let isRtl = Locale.characterDirection(forLanguage: selectedLanguage) == .rightToLeft
+            self.isRtl = Locale.characterDirection(forLanguage: selectedLanguage) == .rightToLeft
             UIView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UIButton.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITextView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITextField.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UISwitch.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITableView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UILabel.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
             self.bundle = bundle
             self.locale = Locale(identifier: selectedLanguage)
             return
@@ -57,6 +68,15 @@ final public class LanguageHelper {
         if let path = Bundle.main.path(forResource: "Base", ofType: "lproj"),
            let bundle = Bundle(path: path) {
             self.bundle = bundle
+            self.isRtl = false
+            UIView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UIButton.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITextView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITextField.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UISwitch.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UITableView.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            UILabel.appearance().semanticContentAttribute = isRtl ? .forceRightToLeft : .forceLeftToRight
+            self.locale = Locale(identifier: selectedLanguage)
             return
         }
     }
@@ -85,5 +105,12 @@ extension String {
         } else {
             self = NSLocalizedString(localizationKey, tableName: type.tableName, comment: "")
         }
+    }
+}
+
+extension UIView {
+    open override func awakeFromNib() {
+        super.awakeFromNib()
+        self.semanticContentAttribute = LanguageHelper.shared.isRtl ? .forceRightToLeft : .forceLeftToRight
     }
 }
