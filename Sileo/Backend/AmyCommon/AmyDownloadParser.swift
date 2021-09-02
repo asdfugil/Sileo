@@ -128,33 +128,32 @@ final class AmyDownloadParser: NSObject {
 
 final class AmyDownloadParserDelegate: NSObject, URLSessionDownloadDelegate {
     static let shared = AmyDownloadParserDelegate()
-    public var containers = [AmyDownloadParserContainer]()
+    public var containers = [URL: AmyDownloadParserContainer]()
     private let queue = DispatchQueue(label: "AmyDownloadParserDelegate.ContainerQueue", attributes: .concurrent)
     
     public func container(_ url: URL?) -> AmyDownloadParserContainer? {
         guard let url = url else { return nil }
         var container: AmyDownloadParserContainer?
-        queue.sync {
-            container = self.containers.last(where: { $0.url == url })
+        queue.sync { [self] in
+            container = containers[url]
         }
         return container
     }
 
     public func addContainer(_ container: AmyDownloadParserContainer) {
-        queue.async(flags: .barrier) {
-            self.containers.removeAll(where: { $0.url == container.url })
-            self.containers.append(container)
+        queue.async(flags: .barrier) { [self] in
+            containers[container.url] = container
         }
     }
     
     public func update(_ container: AmyDownloadParserContainer, newRequest: URLRequest? = nil) {
-        queue.async(flags: .barrier) {
+        queue.async(flags: .barrier) { [self] in
             var container = container
-            guard let index = self.containers.lastIndex(where: { $0.url == container.url }) else { return }
-            if let url = newRequest?.url {
-                container.url = url
-            }
-            self.containers[index] = container
+            let oldUrl = container.url
+            let newUrl = newRequest?.url ?? oldUrl
+            container.url = newUrl
+            containers.removeValue(forKey: oldUrl)
+            containers[newUrl] = container
             if let request = newRequest {
                 container.urlChange(request)
             }
@@ -162,21 +161,21 @@ final class AmyDownloadParserDelegate: NSObject, URLSessionDownloadDelegate {
     }
     
     public func remove(_ container: AmyDownloadParserContainer?) {
-        queue.async(flags: .barrier) {
-            self.containers.removeAll(where: { $0.url == container?.url })
+        queue.async(flags: .barrier) { [self] in
+            guard let container = container else { return }
+            containers.removeValue(forKey: container.url)
         }
     }
     
     public func terminate(_ url: URL) {
-        queue.sync {
-            guard let index = self.containers.lastIndex(where: { $0.url == url }) else { return }
-            self.containers[index].toBeTerminated = true
+        queue.sync { [self] in
+            containers[url]?.toBeTerminated = true
         }
     }
     
     // The Download Finished
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard let container = container(downloadTask.response?.url) else { return }
+        guard let container = container(downloadTask.response?.url ?? downloadTask.currentRequest?.url) else { return }
         if container.toBeTerminated {
             remove(container)
             downloadTask.cancel()
@@ -227,13 +226,14 @@ final class AmyDownloadParserDelegate: NSObject, URLSessionDownloadDelegate {
     
     // Checking for errors in the download
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard var container = container(task.response?.url) else { return }
+        guard var container = container(task.response?.url ?? task.currentRequest?.url) else { return }
         if container.toBeTerminated {
             remove(container)
             return
         }
         if let error = error {
             if (error as NSError).code == NSURLErrorCancelled || (error as NSError).code == NSFileWriteOutOfSpaceError { return }
+            container.shouldResume = true
             if container.shouldResume {
                 let userInfo = (error as NSError).userInfo
                 if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {

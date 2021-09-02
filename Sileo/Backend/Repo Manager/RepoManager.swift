@@ -14,7 +14,7 @@ final class RepoManager {
     #if targetEnvironment(simulator)
     public final let isMobileProcursus = true
     #else
-    public final let isMobileProcursus = FileManager.default.fileExists(atPath: "/.procursus_strapped")
+    public final let isMobileProcursus = FileManager.default.fileExists(atPath: "\(CommandPath.prefix)/.procursus_strapped")
     #endif
     public final lazy var isProcursus: Bool = {
         #if targetEnvironment(macCatalyst)
@@ -45,24 +45,20 @@ final class RepoManager {
 
     public func update(_ repo: Repo) {
         repoDatabase.async(flags: .barrier) {
-            guard let index = self.repoList.lastIndex(where: { $0.rawURL == repo.rawURL }) else { return }
             repo.releaseProgress = 0
             repo.packagesProgress = 0
             repo.releaseGPGProgress = 0
             repo.startedRefresh = false
-            self.repoList[index] = repo
         }
     }
 
     public func update(_ repos: [Repo]) {
         repoDatabase.sync(flags: .barrier) {
             for repo in repos {
-                guard let index = self.repoList.lastIndex(where: { $0.rawURL == repo.rawURL }) else { return }
                 repo.releaseProgress = 0
                 repo.packagesProgress = 0
                 repo.releaseGPGProgress = 0
                 repo.startedRefresh = false
-                self.repoList[index] = repo
             }
         }
     }
@@ -224,6 +220,10 @@ final class RepoManager {
 
         repoListLock.wait()
         let repo = Repo()
+        var suites = suites
+        if suites.isEmpty {
+            suites = "./"
+        }
         repo.rawURL = normalizedStr
         repo.suite = suites
         repo.components = components.split(separator: " ") as? [String] ?? [components]
@@ -315,6 +315,10 @@ final class RepoManager {
                 repo.rawURL = {
                     repoURL + (repoURL.last == "/" ? "" : "/")
                 }()
+                var suite = suite
+                if suite.isEmpty {
+                    suite = "./"
+                }
                 repo.suite = suite
                 repo.components = components ?? []
                 repo.entryFile = url.absoluteString

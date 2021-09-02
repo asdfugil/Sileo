@@ -10,23 +10,23 @@ import Foundation
 import os
 
 class PackageListViewController: SileoViewController, UIGestureRecognizerDelegate {
-    @IBOutlet var collectionView: UICollectionView?
-    @IBOutlet var downloadsButton: UIBarButtonItem?
+    @IBOutlet final var collectionView: UICollectionView?
+    @IBOutlet final var downloadsButton: UIBarButtonItem?
     
-    @IBInspectable var showSearchField: Bool = false
-    @IBInspectable var showUpdates: Bool = false
-    @IBInspectable var showWishlist: Bool = false
-    @IBInspectable public var loadProvisional: Bool = false
+    @IBInspectable final var showSearchField: Bool = false
+    @IBInspectable final var showUpdates: Bool = false
+    @IBInspectable final var showWishlist: Bool = false
+    @IBInspectable final public var loadProvisional: Bool = false
      
-    @IBInspectable public var packagesLoadIdentifier: String = ""
-    public var repoContext: Repo?
-    private var showProvisional: Bool = false
+    @IBInspectable final public var packagesLoadIdentifier: String = ""
+    final public var repoContext: Repo?
+    final private var showProvisional: Bool = false
     
-    private var packages: [Package] = []
-    private var availableUpdates: [Package] = []
-    private var ignoredUpdates: [Package] = []
-    private var searchCache: [String: [Package]] = [:]
-    private var provisionalPackages: [ProvisionalPackage] = []
+    final private var packages: [Package] = []
+    final private var availableUpdates: [Package] = []
+    final private var ignoredUpdates: [Package] = []
+    final private var searchCache: [String: [Package]] = [:]
+    final private var provisionalPackages: [ProvisionalPackage] = []
     
     private var displaySettings = false
     
@@ -134,6 +134,12 @@ class PackageListViewController: SileoViewController, UIGestureRecognizerDelegat
         
         searchController = UISearchController(searchResultsController: nil)
         searchController?.searchBar.placeholder = String(localizationKey: "Package_Search.Placeholder")
+        if #available(iOS 13, *) {
+            searchController?.searchBar.searchTextField.semanticContentAttribute = LanguageHelper.shared.isRtl ? .forceRightToLeft : .forceLeftToRight
+        } else {
+            let textfieldOfSearchBar = searchController?.searchBar.value(forKey: "searchField") as? UITextField
+            textfieldOfSearchBar?.semanticContentAttribute = LanguageHelper.shared.isRtl ? .forceRightToLeft : .forceLeftToRight
+        }
         searchController?.searchBar.delegate = self
         searchController?.searchResultsUpdater = self
         searchController?.obscuresBackgroundDuringPresentation = false
@@ -211,13 +217,11 @@ class PackageListViewController: SileoViewController, UIGestureRecognizerDelegat
         searchController?.searchBar.isFirstResponder ?? false
     }
     
-    func controller(package: Package) -> PackageViewController {
-        let packageViewController = PackageViewController(nibName: "PackageViewController", bundle: nil)
-        packageViewController.package = package
-        return packageViewController
+    func controller(package: Package) -> PackageActions {
+        NativePackageViewController.viewController(for: package)
     }
     
-    func controller(indexPath: IndexPath) -> PackageViewController? {
+    func controller(indexPath: IndexPath) -> PackageActions? {
         switch findWhatFuckingSectionThisIs(indexPath.section) {
         case .canister:
             let pro = provisionalPackages[indexPath.row]
@@ -326,7 +330,18 @@ class PackageListViewController: SileoViewController, UIGestureRecognizerDelegat
         self.navigationController?.pushViewController(wishlistController, animated: true)
     }
     
+    private func hapticResponse() {
+        if #available(iOS 13, *) {
+            let generator = UIImpactFeedbackGenerator(style: .soft)
+            generator.impactOccurred()
+        } else {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+        }
+    }
+    
     @objc func upgradeAllClicked(_ sender: Any?) {
+        hapticResponse()
         PackageListManager.shared.upgradeAll()
     }
     
@@ -705,12 +720,26 @@ extension PackageListViewController: UISearchResultsUpdating {
             } else {
                 packages = packageManager.packageList(identifier: self.packagesLoadIdentifier,
                                                       search: query,
-                                                      sortPackages: true,
+                                                      sortPackages: self.packagesLoadIdentifier == "--installed" ? false : true,
                                                       repoContext: self.repoContext,
                                                       lookupTable: self.searchCache)
             }
             
             if self.packagesLoadIdentifier == "--installed" {
+                var allPackages: [String: Package] = [:]
+                packages.forEach { allPackages[$0.packageID] = $0 }
+                let foundPackages = packageManager.packages(identifiers: Array(allPackages.keys), sorted: false)
+                for package in foundPackages {
+                    guard let existing = allPackages[package.packageID] else { continue }
+                    if existing.version == package.version {
+                        allPackages[package.packageID] = package
+                    } else {
+                        if let correct = package.getVersion(existing.version) {
+                            allPackages[package.packageID] = correct
+                        }
+                    }
+                }
+                packages = Array(allPackages.values)
                 switch SortMode() {
                 case .installdate:
                     packages = packages.sorted(by: { package1, package2 -> Bool in
@@ -728,7 +757,8 @@ extension PackageListViewController: UISearchResultsUpdating {
                     })
                 case .size:
                     packages = packages.sorted { $0.installedSize ?? 0 > $1.installedSize ?? 0 }
-                default: break
+                case .name:
+                    packages = packageManager.sortPackages(packages: packages, search: query)
                 }
             }
             

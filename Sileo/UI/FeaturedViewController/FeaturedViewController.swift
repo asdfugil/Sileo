@@ -47,7 +47,7 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
             if status != 0 || output != "root\n" {
                 DispatchQueue.main.sync {
                     let alertController = UIAlertController(title: String(localizationKey: "Installation_Error.Title", type: .error),
-                                                            message: String(localizationKey: "Installation_Error.Body", type: .error),
+                                                            message: "\(String(localizationKey: "Installation_Error.Body", type: .error))\n Output = \(output)\n Status = \(status)",
                                                             preferredStyle: .alert)
                     self.present(alertController, animated: true, completion: nil)
                 }
@@ -159,9 +159,8 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
                     findPackageInDict(dict)
                     
                     var nonFound = [String]()
-                    let allPackages = packageMan.allPackagesArray
                     for package in packages {
-                        if packageMan.newestPackage(identifier: package, repoContext: nil, packages: allPackages) == nil {
+                        if packageMan.newestPackage(identifier: package, repoContext: nil) == nil {
                             nonFound.append(package)
                         }
                     }
@@ -291,7 +290,7 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
         
         if let navigationBar = self.navigationController?.navigationBar {
             navigationBar.addSubview(profileButton)
-            if UIApplication.shared.userInterfaceLayoutDirection == .rightToLeft {
+            if LanguageHelper.shared.isRtl {
                 profileButton.leftAnchor.constraint(equalTo: navigationBar.leftAnchor, constant: 16).isActive = true
             } else {
                 profileButton.rightAnchor.constraint(equalTo: navigationBar.rightAnchor, constant: -16).isActive = true
@@ -310,9 +309,8 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
     }
     
     public func showPackage(_ package: Package?) {
-        let packageViewController = PackageViewController(nibName: "PackageViewController", bundle: nil)
-        packageViewController.package = package
-        self.navigationController?.pushViewController(packageViewController, animated: true)
+        guard let package = package else { return }
+        self.navigationController?.pushViewController(NativePackageViewController.viewController(for: package), animated: true)
     }
     
     func moveAndResizeProfile(height: CGFloat) {

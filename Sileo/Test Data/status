@@ -94,11 +94,14 @@ Section: Tweaks
 Installed-Size: 2948
 Maintainer: Amy While
 Architecture: iphoneos-arm
-Version: 0.1-430+debug
+Version: 0.1-Gay+debug
 Depends: mobilesubstrate (>= 0.9.5000)
 Description: NFC Fuckery
 Name: Aemulo
 Author: Amy While
+Icon: https://elihwyma.github.io/Aemulo/assets/Icon.png
+Header: https://elihwyma.github.io/Aemulo/assets/Depiction-Header.png
+Native-Depiction: https://pastebin.com/raw/YhYxBbAm
 
 Package: com.amywhile.signalreborn
 Status: install ok installed
@@ -3747,7 +3750,7 @@ Section: Libraries
 Installed-Size: 2904
 Maintainer: Hayden Seay <me@diatr.us>
 Architecture: iphoneos-arm
-Version: 2.3.7
+Version: Test
 Replaces: apt1.8, apt1.4, libapt, libapt-pkg5.0, apt-lib, apt-key, apt (<< 2.1.10-2)
 Provides: libapt-pkg (= 2.3.7)
 Depends: libiosexec1, libgcrypt20, liblz4-1, liblzma5 (>= 5.2.5), libxxhash0, libzstd1

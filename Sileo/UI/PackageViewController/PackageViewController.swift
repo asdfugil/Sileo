@@ -13,12 +13,11 @@ import MessageUI
 import os.log
 
 class PackageViewController: SileoViewController, PackageQueueButtonDataProvider,
-    UIScrollViewDelegate, DepictionViewDelegate, MFMailComposeViewControllerDelegate {
+    UIScrollViewDelegate, DepictionViewDelegate, MFMailComposeViewControllerDelegate, PackageActions {
     public var package: Package?
     public var depictionHeight = CGFloat(0)
 
     public var isPresentedModally = false
-    public var packageAdvertisementCount = Double(0)
 
     private weak var weakNavController: UINavigationController?
 
@@ -45,6 +44,7 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
     private var price = ""
     private var purchased = false
     private var available = false
+    private var headerURL: String?
 
     private var installedPackage: Package?
 
@@ -88,12 +88,16 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
             newDepictView.delegate = self
             
             if let imageURL = rawDepict["headerImage"] as? String {
-                self.depictionBackgroundView.image = AmyNetworkResolver.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
-                    if refresh,
-                       let strong = self,
-                       let image = image {
-                        DispatchQueue.main.async {
-                            strong.depictionBackgroundView.image = image
+                if imageURL != headerURL {
+                    self.headerURL = imageURL
+                    self.depictionBackgroundView.image = AmyNetworkResolver.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
+                        if refresh,
+                           let strong = self,
+                           imageURL == strong.headerURL,
+                           let image = image {
+                            DispatchQueue.main.async {
+                                strong.depictionBackgroundView.image = image
+                            }
                         }
                     }
                 }
@@ -237,7 +241,23 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
 
         downloadButton.package = package
         navBarDownloadButton?.package = package
-
+        
+        if let imageURL = package.rawControl["header"] {
+            if imageURL != headerURL {
+                self.headerURL = imageURL
+                self.depictionBackgroundView.image = AmyNetworkResolver.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
+                    if refresh,
+                       let strong = self,
+                       imageURL == strong.headerURL,
+                       let image = image {
+                        DispatchQueue.main.async {
+                            strong.depictionBackgroundView.image = image
+                        }
+                    }
+                }
+            }
+        }
+        
         if package.hasIcon(),
             let rawIcon = package.icon {
             let image = AmyNetworkResolver.shared.image(rawIcon, size: packageIconView.frame.size) { [weak self] refresh, image in
@@ -294,8 +314,6 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
             contentView.addSubview(depictionView)
             self.depictionView = depictionView
         }
-
-        self.packageAdvertisementCount = 0
 
         if let depiction = package.depiction,
             let depictionURL = URL(string: depiction) {

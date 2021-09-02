@@ -29,6 +29,7 @@ final class Package: Hashable, Equatable {
     public var commercial: Bool = false
     public var installedSize: Int?
     public var tags: PackageTags = .none
+    public var nativeDepiction: String?
     
     public var allVersionsInternal = [String: PackageOld]()
     public var allVersions: [Package] {
@@ -85,6 +86,14 @@ final class Package: Hashable, Equatable {
             allVersionsInternal[package.version] = package
         }
     }
+    
+    public func getVersion(_ version: String) -> Package? {
+        if version == self.version { return self }
+        if let package = allVersionsInternal[version] {
+            return package.packageNew
+        }
+        return nil
+    }
 }
 
 func == (lhs: Package, rhs: Package) -> Bool {
@@ -108,6 +117,9 @@ final class PackageOld: Hashable, Equatable {
     public var packageFileURL: URL?
     public var architecture: String?
     public var installedSize: Int?
+    public var author: String?
+    public var maintainer: String?
+    public var nativeDepiction: String?
     
     init(package: Package) {
         self.sourceFile = package.sourceFile
@@ -126,6 +138,9 @@ final class PackageOld: Hashable, Equatable {
         self.packageFileURL = package.packageFileURL
         self.architecture = package.architecture
         self.installedSize = package.installedSize
+        self.author = package.author
+        self.maintainer = package.maintainer
+        self.nativeDepiction = package.nativeDepiction
     }
     
     public var packageNew: Package {
@@ -143,6 +158,9 @@ final class PackageOld: Hashable, Equatable {
         package.packageFileURL = self.packageFileURL
         package.architecture = self.architecture
         package.installedSize = self.installedSize
+        package.maintainer = self.maintainer
+        package.author = self.author
+        package.nativeDepiction = self.nativeDepiction
         return package
     }
     

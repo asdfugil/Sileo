@@ -356,6 +356,10 @@ class DownloadsTableViewController: SileoViewController {
     }
     
     public func transferToInstall() {
+        if isInstalling {
+            return
+        }
+        isInstalling = true
         tableView?.setEditing(false, animated: true)
         
         for cell in tableView?.visibleCells as? [DownloadsTableViewCell] ?? [] {
@@ -363,7 +367,7 @@ class DownloadsTableViewController: SileoViewController {
         }
         
         detailsAttributedString = NSMutableAttributedString(string: "")
-        isInstalling = true
+        
         let installs = installations + upgrades + installdeps
         let removals = uninstallations + uninstalldeps
         self.actions += installs.map { InstallOperation(package: $0.package, operation: .install) }
@@ -411,7 +415,7 @@ class DownloadsTableViewController: SileoViewController {
             window.alpha = 0
             window.transform = .init(scaleX: 0.9, y: 0.9)
         }
-        let refreshSileo = refreshSileo
+
         // When the animation has finished, fire the dumb respring code
         animator.addCompletion { _ in
             switch self.returnButtonAction {
@@ -420,18 +424,13 @@ class DownloadsTableViewController: SileoViewController {
             case .reopen:
                 exit(0)
             case .restart, .reload:
-                if refreshSileo {
-                    spawnAsRoot(args: [CommandPath.uicache, "-rp", "\(Bundle.main.bundlePath)"])
-                } else { spawnAsRoot(args: ["/usr/bin/sbreload"]) }
-                let args: [String]
-                if refreshSileo {
-                    args = [CommandPath.uicache, "-rp", Bundle.main.bundlePath]
-                } else {
-                    args = ["/usr/bin/sbreload"] }
-                spawnAsRoot(args: args)
+                if self.refreshSileo {
+                    spawn(command: CommandPath.uicache, args: ["uicache", "-p", "\(Bundle.main.bundlePath)"])
+                }
+                spawn(command: "\(CommandPath.prefix)/usr/bin/sbreload", args: ["sbreload"])
             case .reboot:
-                spawnAsRoot(args: ["/usr/bin/sync"])
-                spawnAsRoot(args: ["/usr/bin/ldrestart"])
+                spawnAsRoot(args: ["\(CommandPath.prefix)/usr/bin/sync"])
+                spawnAsRoot(args: ["\(CommandPath.prefix)/usr/bin/ldrestart"])
             }
         }
         // Fire the animation
@@ -528,10 +527,8 @@ class DownloadsTableViewController: SileoViewController {
         if let detailsAttributedString = self.detailsAttributedString {
             detailsTextView?.attributedText = self.transform(attributedString: detailsAttributedString)
         }
-        
-        let installs = installations + upgrades + installdeps
-        let removals = uninstallations + uninstalldeps
-        APTWrapper.performOperations(installs: installs, removals: removals, progressCallback: { _, statusValid, statusReadable, package in
+
+        APTWrapper.performOperations(installs: installations + upgrades, removals: uninstallations, installDeps: installdeps, progressCallback: { _, statusValid, statusReadable, package in
             if statusValid {
                 self.statusWork(package: package, status: statusReadable)
             }

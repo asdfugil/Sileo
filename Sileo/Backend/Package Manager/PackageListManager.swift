@@ -7,7 +7,7 @@
 //
 
 import UIKit
-import CoreSpotlight
+
 
 final class PackageListManager {
     static let reloadNotification = Notification.Name("SileoPackageCacheReloaded")
@@ -20,7 +20,7 @@ final class PackageListManager {
         }
     }
     
-    private(set) var localPackages = [String: Package]()
+    public var localPackages = [String: Package]()
     
     private let initSemphaore = DispatchSemaphore(value: 0)
     public var isLoaded = false
@@ -43,9 +43,6 @@ final class PackageListManager {
     
     init() {
         self.installedPackages = PackageListManager.readPackages(installed: true)
-        DownloadManager.aptQueue.async {
-            DependencyResolverAccelerator.shared.preflightInstalled()
-        }
         DispatchQueue.global(qos: .userInitiated).async {
             let repoMan = RepoManager.shared
             var repoList = repoMan.repoList
@@ -83,6 +80,9 @@ final class PackageListManager {
                     if self.initSemphaore.signal() == 0 {
                         break
                     }
+                }
+                DownloadManager.aptQueue.async {
+                    DependencyResolverAccelerator.shared.preflightInstalled()
                 }
                 NotificationCenter.default.post(name: PackageListManager.reloadNotification, object: nil)
                 NotificationCenter.default.post(name: NewsViewController.reloadNotification, object: nil)
@@ -175,6 +175,7 @@ final class PackageListManager {
         package.packageDescription = dictionary["description"]
         package.legacyDepiction = dictionary["depiction"]
         package.depiction = dictionary["sileodepiction"]
+        package.nativeDepiction = dictionary["native-depiction"]
         
         if let installedSize = dictionary["installed-size"] {
             package.installedSize = Int(installedSize)
@@ -344,8 +345,9 @@ final class PackageListManager {
             let index = identifier.index(identifier.startIndex, offsetBy: 7)
             let authorEmail = String(identifier[index...]).lowercased()
             packageList = packageList.filter {
-                guard let lowercaseAuthor = $0.author?.lowercased() else {
-                    return true
+                guard let lowercaseAuthor = $0.author?.lowercased(),
+                      !lowercaseAuthor.isEmpty else {
+                    return false
                 }
                 return ControlFileParser.authorEmail(string: lowercaseAuthor) == authorEmail.lowercased()
             }
@@ -449,19 +451,32 @@ final class PackageListManager {
         } else if let repoContext = repoContext {
             return repoContext.packageDict[identifier.lowercased()]
         } else {
-            var packages = packages ?? allPackagesArray
-            packages = packages.filter { $0.packageID == identifier }
-            var tmp: Package?
-            for package in packages {
-                if let old = tmp {
-                    if DpkgWrapper.isVersion(package.version, greaterThan: old.version) {
-                        tmp = package
+            var newestPackage: Package?
+            if var packages = packages {
+                packages = packages.filter { $0.packageID == identifier }
+                for package in packages {
+                    if let old = newestPackage {
+                        if DpkgWrapper.isVersion(package.version, greaterThan: old.version) {
+                            newestPackage = package
+                        }
+                    } else {
+                        newestPackage = package
                     }
-                } else {
-                    tmp = package
+                }
+                return newestPackage
+            }
+            for repo in RepoManager.shared.repoList {
+                if let package = repo.packageDict[identifier] {
+                    if let old = newestPackage {
+                        if DpkgWrapper.isVersion(package.version, greaterThan: old.version) {
+                            newestPackage = package
+                        }
+                    } else {
+                        newestPackage = package
+                    }
                 }
             }
-            return tmp
+            return newestPackage
         }
     }
     
@@ -479,59 +494,64 @@ final class PackageListManager {
         return package
     }
     
-    public func packages(identifiers: [String], sorted: Bool, repoContext: Repo? = nil) -> [Package] {
+    public func packages(identifiers: [String], sorted: Bool, repoContext: Repo? = nil, packages: [Package]? = nil) -> [Package] {
         if identifiers.isEmpty { return [] }
-        let packages = (repoContext?.packageArray ?? allPackagesArray)
         var rawPackages = [Package]()
-        for identifier in identifiers {
-            rawPackages += packages.filter { $0.packageID == identifier }
-            if let package = localPackages[identifier] {
-                rawPackages.append(package)
-            }
-        }
-        if sorted {
-            return rawPackages.sorted(by: { pkg1, pkg2 -> Bool in
-                guard let package1 = pkg1.name else {
-                    return false
+        if let packages = (repoContext?.packageArray ?? packages) {
+            for identifier in identifiers {
+                rawPackages += packages.filter { $0.packageID == identifier }
+                if let package = localPackages[identifier] {
+                    rawPackages.append(package)
                 }
-                guard let package2 = pkg2.name else {
-                    return false
-                }
-                return package1.compare(package2) != .orderedDescending
-            })
-        } else {
-            var packagesMap: [String: Package] = [:]
-            for package in rawPackages {
-                packagesMap[package.packageID] = package
             }
             
-            var packages: [Package] = []
-            for identifier in identifiers {
-                guard let package = packagesMap[identifier] else {
-                    continue
+            if sorted {
+                return rawPackages.sorted(by: { pkg1, pkg2 -> Bool in
+                    guard let package1 = pkg1.name else {
+                        return false
+                    }
+                    guard let package2 = pkg2.name else {
+                        return false
+                    }
+                    return package1.compare(package2) != .orderedDescending
+                })
+            } else {
+                var packagesMap: [String: Package] = [:]
+                for package in rawPackages {
+                    packagesMap[package.packageID] = package
                 }
-                packages.append(package)
+                
+                var packages: [Package] = []
+                for identifier in identifiers {
+                    guard let package = packagesMap[identifier] else {
+                        continue
+                    }
+                    packages.append(package)
+                }
+                return packages
             }
-            return packages
         }
+        
+        return identifiers.compactMap { newestPackage(identifier: $0, repoContext: nil) }
     }
     
     public func package(identifier: String, version: String, packages: [Package]? = nil) -> Package? {
-        let allPackages = packages ?? allPackagesArray
-        return allPackages.first(where: { $0.packageID == identifier && $0.version == version })
+        if let packages = packages {
+            return packages.first(where: { $0.packageID == identifier && $0.version == version })
+        }
+        for repo in RepoManager.shared.repoList {
+            if let package = repo.packageDict[identifier],
+               let version = package.getVersion(version) {
+                return version
+            }
+        }
+        if let package = localPackages[identifier],
+           let version = package.getVersion(version) {
+            return version
+        }
+        return nil
     }
-    
-    public func package(identifiersAndVersions: [(String, String)], repoContext: Repo?, packages: [Package]? = nil) -> [Package]? {
-        let allPackages = packages ?? allPackagesArray
-        
-        let filtered = allPackages.filter({
-            let pkg = $0
-            return identifiersAndVersions.contains(where: { $0.0 == pkg.packageID && $0.1 == pkg.version })
-        })
-        
-        return filtered.isEmpty ? nil : filtered
-    }
-    
+
     public func upgradeAll() {
         self.upgradeAll(completion: nil)
     }

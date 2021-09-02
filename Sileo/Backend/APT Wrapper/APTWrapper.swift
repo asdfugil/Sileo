@@ -65,12 +65,12 @@ class APTWrapper {
         var dictionary: [String: Int64] = [:]
         let fileManager = FileManager.default
 
-        guard let apps = try? fileManager.contentsOfDirectory(atPath: "/Applications") else {
+        guard let apps = try? fileManager.contentsOfDirectory(atPath: "\(CommandPath.prefix)/Applications") else {
             return dictionary
         }
 
         for app in apps {
-            let infoPlist = String(format: "/Applications/%@/Info.plist", app)
+            let infoPlist = String(format: "\(CommandPath.prefix)/Applications/%@/Info.plist", app)
 
             guard let attr = try? fileManager.attributesOfItem(atPath: infoPlist) else {
                 continue
@@ -154,6 +154,7 @@ class APTWrapper {
 
     public class func performOperations(installs: [DownloadPackage],
                                         removals: [DownloadPackage],
+                                        installDeps: [DownloadPackage],
                                         progressCallback: @escaping (Double, Bool, String, String) -> Void,
                                         outputCallback: @escaping (String, Int) -> Void,
                                         completionCallback: @escaping (Int, FINISH, Bool) -> Void) {
@@ -174,7 +175,6 @@ class APTWrapper {
             arguments.append(packageStr)
         }
         var finish = FINISH.back
-        var runUICache = false
         #if targetEnvironment(macCatalyst)
         arguments[0] = "apt-get"
         DispatchQueue.global(qos: .default).async {
@@ -211,7 +211,7 @@ class APTWrapper {
             fatalError("Unable to find giveMeRoot")
         }
         DispatchQueue.global(qos: .default).async {
-            var oldApps = APTWrapper.dictionaryOfScannedApps()
+            let oldApps = APTWrapper.dictionaryOfScannedApps()
 
             var pipestatusfd: [Int32] = [0, 0]
             var pipestdout: [Int32] = [0, 0]
@@ -266,7 +266,7 @@ class APTWrapper {
             }
 
             var pid: pid_t = 0
-
+            
             let spawnStatus = posix_spawn(&pid, giveMeRootPath, &fileActions, nil, argv + [nil], env + [nil])
             if spawnStatus != 0 {
                 return
@@ -398,7 +398,6 @@ class APTWrapper {
                             }
                             if sileoLine.hasPrefix("finish:uicache") {
                                 newFinish = .uicache
-                                runUICache = true
                             }
                             if sileoLine.hasPrefix("finish:reopen") {
                                 newFinish = .reopen
@@ -436,33 +435,34 @@ class APTWrapper {
 
             var status: Int32 = 0
             waitpid(pid, &status, 0)
-            
             var refreshSileo = false
-            if runUICache {
+            
+            let newApps = dictionaryOfScannedApps()
+            var difference = Set<String>()
+            for (key, _) in oldApps where newApps[key] == nil {
+                difference.insert(key)
+            }
+            for (key, _) in newApps where oldApps[key] == nil {
+                difference.insert(key)
+            }
+            for (key, value) in newApps where oldApps[key] != nil {
+                guard let oldValue = oldApps[key] else { continue }
+                if oldValue != value {
+                    difference.insert(key)
+                }
+            }
+            if !difference.isEmpty {
                 outputCallback("Updating Icon Cache\n", debugFD)
-
-                var newApps = dictionaryOfScannedApps()
-
-                for key in oldApps.keys where oldApps[key] == newApps[key] {
-                    oldApps.removeValue(forKey: key)
-                    newApps.removeValue(forKey: key)
-                }
-
-                for key in newApps.keys where oldApps[key] == newApps[key] {
-                    oldApps.removeValue(forKey: key)
-                    newApps.removeValue(forKey: key)
-                }
-
-                let diff = newApps.merging(oldApps) { current, _ in current }
-                for appName in diff.keys {
-                    let appPath = URL(fileURLWithPath: "/Applications/").appendingPathComponent(appName)
+                for appName in difference {
+                    let appPath = URL(fileURLWithPath: "\(CommandPath.prefix)/Applications/").appendingPathComponent(appName)
                     if appPath.path == Bundle.main.bundlePath {
                         refreshSileo = true
                     } else {
-                        spawn(command: "/usr/bin/uicache", args: ["uicache", "-p", "\(appPath.path)"])
+                        spawn(command: "\(CommandPath.prefix)/usr/bin/uicache", args: ["uicache", "-p", "\(appPath.path)"])
                     }
                 }
             }
+
             spawnAsRoot(args: [CommandPath.aptget, "clean"])
             for file in DownloadManager.shared.cachedFiles {
                 deleteFileAsRoot(file)
