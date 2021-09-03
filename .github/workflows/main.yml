@@ -62,7 +62,6 @@ jobs:
         uses: actions/upload-artifact@v2.2.2
         with:
           path: ./packages/*.deb
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
 
       - name: Copy Procursus to Cache Location
         run: |
