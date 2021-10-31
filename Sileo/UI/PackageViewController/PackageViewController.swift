@@ -9,7 +9,7 @@
 import Foundation
 import SafariServices
 import MessageUI
-
+import Evander
 import os.log
 
 class PackageViewController: SileoViewController, PackageQueueButtonDataProvider,
@@ -70,59 +70,65 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
             failureCallback?()
             return
         }
-        DispatchQueue.main.sync {
-            if let rawTintColor = rawDepict["tintColor"] as? String, let tintColor = UIColor(css: rawTintColor) {
-                self.depictionFooterView?.tintColor = tintColor
-                self.downloadButton.tintColor = tintColor
-                self.downloadButton.updateStyle()
-                self.navBarDownloadButton?.tintColor = tintColor
-                self.navBarDownloadButton?.updateStyle()
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.parseNativeDepiction(data, host: host, failureCallback: failureCallback)
             }
-            
-            let oldDepictView = self.depictionView
-            guard let newDepictView = DepictionBaseView.view(dictionary: rawDepict, viewController: self, tintColor: nil, isActionable: false) else {
-                return
-            }
-            
-            oldDepictView?.delegate = nil
-            newDepictView.delegate = self
-            
-            if let imageURL = rawDepict["headerImage"] as? String {
-                if imageURL != headerURL {
-                    self.headerURL = imageURL
-                    self.depictionBackgroundView.image = AmyNetworkResolver.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
-                        if refresh,
-                           let strong = self,
-                           imageURL == strong.headerURL,
-                           let image = image {
-                            DispatchQueue.main.async {
-                                strong.depictionBackgroundView.image = image
-                            }
+            return
+        }
+        
+        if let rawTintColor = rawDepict["tintColor"] as? String, let tintColor = UIColor(css: rawTintColor) {
+            self.depictionFooterView?.tintColor = tintColor
+            self.downloadButton.tintColor = tintColor
+            self.downloadButton.updateStyle()
+            self.navBarDownloadButton?.tintColor = tintColor
+            self.navBarDownloadButton?.updateStyle()
+        }
+        
+        let oldDepictView = self.depictionView
+        guard let newDepictView = DepictionBaseView.view(dictionary: rawDepict, viewController: self, tintColor: nil, isActionable: false) else {
+            return
+        }
+        
+        oldDepictView?.delegate = nil
+        newDepictView.delegate = self
+        
+        if let imageURL = rawDepict["headerImage"] as? String {
+            if imageURL != headerURL {
+                self.headerURL = imageURL
+                self.depictionBackgroundView.image = EvanderNetworking.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
+                    if refresh,
+                       let strong = self,
+                       imageURL == strong.headerURL,
+                       let image = image {
+                        DispatchQueue.main.async {
+                            strong.depictionBackgroundView.image = image
                         }
                     }
                 }
             }
-            
-            newDepictView.alpha = 0.1
-            self.depictionView = newDepictView
-            self.contentView.addSubview(newDepictView)
-            self.viewDidLayoutSubviews()
-            
-            UIView.animate(withDuration: 0.25, animations: {
-                oldDepictView?.alpha = 0
-                newDepictView.alpha = 1
-            }, completion: { _ in
-                oldDepictView?.removeFromSuperview()
-                if let minVersion = rawDepict["minVersion"] as? String,
-                    minVersion.compare(StoreVersion) == .orderedDescending {
-                    self.versionTooLow()
-                }
-            })
         }
+        
+        newDepictView.alpha = 0.1
+        self.depictionView = newDepictView
+        self.contentView.addSubview(newDepictView)
+        self.viewDidLayoutSubviews()
+        
+        UIView.animate(withDuration: 0.25, animations: {
+            oldDepictView?.alpha = 0
+            newDepictView.alpha = 1
+        }, completion: { _ in
+            oldDepictView?.removeFromSuperview()
+            if let minVersion = rawDepict["minVersion"] as? String,
+                minVersion.compare(StoreVersion) == .orderedDescending {
+                self.versionTooLow()
+            }
+        })
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
         weakNavController = self.navigationController
         
         weak var weakSelf = self
@@ -132,10 +138,13 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
                                                object: nil)
         
         packageName.textColor = .sileoLabel
+        let collapsed = splitViewController?.isCollapsed ?? false
+        let navController = collapsed ? (splitViewController?.viewControllers[0] as? UINavigationController) : self.navigationController
+        navController?.setNavigationBarHidden(true, animated: true)
 
         self.navigationItem.largeTitleDisplayMode = .never
         scrollView.delegate = self
-
+        
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(PackageViewController.reloadData),
                                                name: PackageListManager.reloadNotification,
@@ -146,12 +155,6 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         self.extendedLayoutIncludesOpaqueBars = true
         self.edgesForExtendedLayout = [.top, .bottom]
 
-        scrollView.contentInset = UIEdgeInsets(top: self.navigationController?.navigationBar.bounds.height ?? 0 +
-            UIApplication.shared.statusBarFrame.height,
-                                               left: 0,
-                                               bottom: self.tabBarController?.tabBar.bounds.height ?? 0,
-                                               right: 0)
-
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: self.tabBarController?.tabBar.bounds.height ?? 0, right: 0)
 
@@ -160,11 +163,13 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         self.navigationController?.navigationBar._backgroundOpacity = 0
         self.navigationController?.navigationBar.tintColor = .white
         self.statusBarStyle = .lightContent
-
+        
         self.navigationController?.navigationBar.isTranslucent = true
-
+        
+        
         downloadButton.viewControllerForPresentation = self
         downloadButton.dataProvider = self
+        
         let navBarDownloadButton = PackageQueueButton()
         navBarDownloadButton.viewControllerForPresentation = self
         navBarDownloadButton.dataProvider = self
@@ -245,7 +250,7 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         if let imageURL = package.rawControl["header"] {
             if imageURL != headerURL {
                 self.headerURL = imageURL
-                self.depictionBackgroundView.image = AmyNetworkResolver.shared.image(imageURL, size: depictionBackgroundView.frame.size) { [weak self] refresh, image in
+                self.depictionBackgroundView.image = EvanderNetworking.shared.image(imageURL, size: CGSize(width: depictionBackgroundView.frame.width, height: 200)) { [weak self] refresh, image in
                     if refresh,
                        let strong = self,
                        imageURL == strong.headerURL,
@@ -260,7 +265,7 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         
         if package.hasIcon(),
             let rawIcon = package.icon {
-            let image = AmyNetworkResolver.shared.image(rawIcon, size: packageIconView.frame.size) { [weak self] refresh, image in
+            let image = EvanderNetworking.shared.image(rawIcon, size: packageIconView.frame.size) { [weak self] refresh, image in
                 if refresh,
                     let strong = self,
                     let image = image,
@@ -318,12 +323,12 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         if let depiction = package.depiction,
             let depictionURL = URL(string: depiction) {
             let urlRequest = URLManager.urlRequest(depictionURL)
-            let task = URLSession.shared.dataTask(with: urlRequest) { data, _, _ in
-                if let data = data {
-                    self.parseNativeDepiction(data, host: depictionURL.host ?? "", failureCallback: nil)
-                }
+            EvanderNetworking.request(request: urlRequest, type: Data.self) { [weak self] success, _, _, data in
+                guard success,
+                      let data = data,
+                      let `self` = self else { return }
+                self.parseNativeDepiction(data, host: depictionURL.host ?? "", failureCallback: nil)
             }
-            task.resume()
         }
 
         depictionFooterView?.removeFromSuperview()
@@ -490,7 +495,7 @@ class PackageViewController: SileoViewController, PackageQueueButtonDataProvider
         
         let collapsed = splitViewController?.isCollapsed ?? false
         let navController = collapsed ? (splitViewController?.viewControllers[0] as? UINavigationController) : self.navigationController
-        
+        navController?.setNavigationBarHidden(false, animated: true)
         if navBarAlphaOffset < 1 {
             var tintColor = UINavigationBar.appearance().tintColor
             if let color = self.depictionView?.tintColor {

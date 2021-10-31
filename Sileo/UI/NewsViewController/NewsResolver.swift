@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Evander
 
 class NewsResolver {
     
@@ -20,7 +21,7 @@ class NewsResolver {
     
     public func getArticles() {
         if !articles.isEmpty { return }
-        AmyNetworkResolver.dict(url: "https://getsileo.app/api/new.json") { [weak self] success, dict in
+        EvanderNetworking.request(url: "https://getsileo.app/api/new.json", type: [String: Any].self) { [weak self] success, _, _, dict in
             guard success,
                   let strong = self,
                   let dict = dict,

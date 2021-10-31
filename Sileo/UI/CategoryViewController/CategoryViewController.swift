@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Evander
 
 class CategoryViewController: SileoTableViewController {
     public var repoContext: Repo?
@@ -14,7 +15,6 @@ class CategoryViewController: SileoTableViewController {
     private var categories: [String]?
     private var categoriesCountCache: [String: Int]?
     
-    private var featuredBannerData: [String: Any]?
     private var bannersView: FeaturedBannersView?
     private var showInstalled = false
     
@@ -140,20 +140,22 @@ class CategoryViewController: SileoTableViewController {
             guard let featuredURL = repoContext.url?.appendingPathComponent("sileo-featured.json") else {
                 return
             }
-            AmyNetworkResolver.dict(url: featuredURL, cache: true) { [weak self] success, dict in
+            EvanderNetworking.request(url: featuredURL, type: [String: Any].self, cache: .init(localCache: true, skipNetwork: true)) { [weak self] success, _, _, dict in
                 guard success,
+                      let `self` = self,
                       let depiction = dict,
-                      let strong = self,
                       (depiction["class"] as? String) == "FeaturedBannersView" else { return }
-                strong.featuredBannerData = depiction
                 guard let banners = depiction["banners"] as? [[String: Any]],
                       !banners.isEmpty else { return }
                 DispatchQueue.main.async {
-                    if let headerView = FeaturedBannersView.view(dictionary: depiction, viewController: strong, tintColor: nil, isActionable: false) {
-                        let newHeight = headerView.depictionHeight(width: strong.view.bounds.width)
+                    if let headerView = FeaturedBannersView.view(dictionary: depiction, viewController: self, tintColor: nil, isActionable: false) {
+                        let newHeight = headerView.depictionHeight(width: self.view.bounds.width)
                         headerView.heightAnchor.constraint(equalToConstant: newHeight).isActive = true
-                        strong.headerStackView?.addArrangedSubview(headerView)
-                        strong.updateHeaderStackView()
+                        for view in self.headerStackView?.arrangedSubviews ?? [] {
+                            view.removeFromSuperview()
+                        }
+                        self.headerStackView?.addArrangedSubview(headerView)
+                        self.updateHeaderStackView()
                     }
                 }
             }

@@ -8,6 +8,7 @@
 
 import Foundation
 import SwipeCellKit
+import Evander
 
 class PackageCollectionViewCell: SwipeCollectionViewCell {
     @IBOutlet var imageView: UIImageView?
@@ -38,7 +39,7 @@ class PackageCollectionViewCell: SwipeCollectionViewCell {
                 descriptionLabel?.text = targetPackage.packageDescription
                 
                 let url = targetPackage.icon ?? ""
-                self.imageView?.image = AmyNetworkResolver.shared.image(url, size: imageView?.frame.size) { [weak self] refresh, image in
+                self.imageView?.image = EvanderNetworking.shared.image(url, size: imageView?.frame.size) { [weak self] refresh, image in
                     if refresh,
                        let strong = self,
                        let image = image,
@@ -64,11 +65,11 @@ class PackageCollectionViewCell: SwipeCollectionViewCell {
         didSet {
             if let provisionalTarget = provisionalTarget {
                 titleLabel?.text = provisionalTarget.name ?? ""
-                authorLabel?.text = "\(provisionalTarget.author ?? "") • \(provisionalTarget.version ?? "")"
+                authorLabel?.text = "\(provisionalTarget.author ?? "") • \(provisionalTarget.version ?? "Unknown")"
                 descriptionLabel?.text = provisionalTarget.description
             
                 let url = provisionalTarget.icon ?? ""
-                self.imageView?.image = AmyNetworkResolver.shared.image(url, size: imageView?.frame.size) { [weak self] refresh, image in
+                self.imageView?.image = EvanderNetworking.shared.image(url, size: imageView?.frame.size) { [weak self] refresh, image in
                     if refresh,
                        let strong = self,
                        let image = image,

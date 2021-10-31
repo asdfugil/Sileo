@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Evander
 
 final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, FeaturedViewDelegate {
     private var profileButton: UIButton?
@@ -38,7 +39,7 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
         }, completion: { _ in
             self.activityIndicatorView?.isHidden = true
         })
-
+        
         #if targetEnvironment(simulator) || TARGET_SANDBOX
         #else
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: DispatchTime.now() + .milliseconds(500)) {
@@ -121,7 +122,7 @@ final class FeaturedViewController: SileoViewController, UIScrollViewDelegate, F
         }
         let agent = self.userAgent 
         let headers: [String: String] = ["User-Agent": agent]
-        AmyNetworkResolver.dict(url: jsonURL, headers: headers, cache: true) { [weak self] success, dict in
+        EvanderNetworking.request(url: jsonURL, type: [String: Any].self, headers: headers) { [weak self] success, _, _, dict in
             guard success,
                   let strong = self,
                   let dict = dict else { return }

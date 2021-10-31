@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import Evander
 
 class FeaturedPackageView: FeaturedBaseView, PackageQueueButtonDataProvider {
     let imageView: PackageIconView
@@ -60,10 +61,9 @@ class FeaturedPackageView: FeaturedBaseView, PackageQueueButtonDataProvider {
         
         super.init(dictionary: dictionary, viewController: viewController, tintColor: tintColor, isActionable: isActionable)
         
-        imageView.image = UIImage(named: "Tweak Icon")
         imageView.widthAnchor.constraint(equalTo: imageView.heightAnchor).isActive = true
         if !packageIcon.isEmpty {
-            imageView.image = AmyNetworkResolver.shared.image(packageIcon, size: imageView.frame.size) { [weak self] refresh, image in
+            imageView.image = EvanderNetworking.shared.image(packageIcon, size: CGSize(width: 128, height: 128)) { [weak self] refresh, image in
                 if refresh,
                    let strong = self,
                    let image = image,
@@ -72,10 +72,10 @@ class FeaturedPackageView: FeaturedBaseView, PackageQueueButtonDataProvider {
                         strong.imageView.image = image
                     }
                 }
-                   
             } ?? UIImage(named: "Tweak Icon")
+        } else {
+            imageView.image = UIImage(named: "Tweak Icon")
         }
-        
         titleLabel.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
         titleLabel.text = packageName
         

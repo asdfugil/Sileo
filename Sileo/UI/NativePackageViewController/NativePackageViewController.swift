@@ -9,6 +9,8 @@
 import UIKit
 import DepictionKit
 import MessageUI
+import Evander
+import SafariServices
 
 protocol PackageActions: UIViewController {
     @available (iOS 13.0, *)
@@ -24,6 +26,7 @@ class NativePackageViewController: SileoViewController, PackageActions {
     
     private var allowNavbarUpdates = false
     private var isUpdatingPurchaseStatus = false
+    private var currentNavBarOpacity = CGFloat(0)
     
     public lazy var downloadButton: PackageQueueButton = {
         let button = PackageQueueButton()
@@ -38,6 +41,8 @@ class NativePackageViewController: SileoViewController, PackageActions {
     public var packageIconView: PackageIconView = {
         let view = PackageIconView()
         view.translatesAutoresizingMaskIntoConstraints = false
+        view.layer.masksToBounds = true
+        view.layer.cornerRadius = 15
         return view
     }()
     public var packageNameLabel: UILabel = {
@@ -85,30 +90,32 @@ class NativePackageViewController: SileoViewController, PackageActions {
             labelContainer.heightAnchor.constraint(equalToConstant: 45),
             
             downloadButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            downloadButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            downloadButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -15),
             downloadButton.leadingAnchor.constraint(equalTo: labelContainer.trailingAnchor, constant: -10)
         ])
         return view
     }()
     
     public lazy var depiction: DepictionContainer = {
-        let depiction = DepictionContainer(presentationController: self, theme: theme)
-        depiction.delegate = self
-        return depiction
+        DepictionContainer(presentationController: self, theme: theme, delegate: self)
     }()
-    
+
+    public lazy var headerImageViewTopAnchor = contentView.topAnchor.constraint(equalTo: headerImageView.topAnchor)
+    public lazy var headerImageViewLeadingAnchor = contentView.leadingAnchor.constraint(equalTo: headerImageView.leadingAnchor)
+    public lazy var headerImageViewTrailingAnchor = contentView.trailingAnchor.constraint(equalTo: headerImageView.trailingAnchor)
+    public lazy var headerImageViewHeightAnchor = headerImageView.heightAnchor.constraint(equalToConstant: 200)
     public var headerImageView: UIImageView = {
         let view = UIImageView()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.contentMode = .scaleAspectFill
-        view.heightAnchor.constraint(equalToConstant: 200).isActive = true
         return view
     }()
     
-    public var scrollView: UIScrollView = {
+    public lazy var scrollView: UIScrollView = {
         let view = UIScrollView()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.backgroundColor = .clear
+        view.delegate = self
         return view
     }()
     public var contentView: UIView = {
@@ -126,7 +133,24 @@ class NativePackageViewController: SileoViewController, PackageActions {
         return shareButton
     }()
     private lazy var navBarShareButtonItem = UIBarButtonItem(customView: shareButton)
-
+    
+    private var packageNavBarIconView = PackageIconView(frame: CGRect(origin: .zero, size: CGSize(width: 32, height: 32)))
+    private lazy var packageNavBarIconViewController: UIView = {
+        let view = UIView(frame: CGRect(origin: .zero, size: CGSize(width: 50, height: 32)))
+        view.addSubview(packageNavBarIconView)
+        packageNavBarIconView.center = view.center
+        packageNavBarIconView.alpha = 0
+        return view
+    }()
+    
+    private lazy var navBarDownloadButton: PackageQueueButton = {
+        let view = PackageQueueButton()
+        view.viewControllerForPresentation = self
+        view.dataProvider = self
+        return view
+    }()
+    private lazy var navBarDownloadButtonItem = UIBarButtonItem(customView: navBarDownloadButton)
+    
     public var theme: Theme {
         Theme(text_color: .sileoLabel,
               background_color: .sileoBackgroundColor,
@@ -156,6 +180,10 @@ class NativePackageViewController: SileoViewController, PackageActions {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        let collapsed = splitViewController?.isCollapsed ?? false
+        let navController = collapsed ? (splitViewController?.viewControllers[0] as? UINavigationController) : self.navigationController
+        navController?.setNavigationBarHidden(true, animated: true)
+        
         view.addSubview(scrollView)
         contentView.addSubview(headerImageView)
         contentView.addSubview(depiction)
@@ -163,21 +191,22 @@ class NativePackageViewController: SileoViewController, PackageActions {
         scrollView.addSubview(contentView)
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             
-            contentView.topAnchor.constraint(equalTo: headerImageView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: headerImageView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: headerImageView.trailingAnchor),
+            headerImageViewTopAnchor,
+            headerImageViewLeadingAnchor,
+            headerImageViewTrailingAnchor,
+            headerImageViewHeightAnchor,
             
-            packageContainer.leadingAnchor.constraint(equalTo: headerImageView.leadingAnchor),
-            packageContainer.trailingAnchor.constraint(equalTo: headerImageView.trailingAnchor),
+            packageContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            packageContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             packageContainer.topAnchor.constraint(equalTo: headerImageView.bottomAnchor),
             
-            depiction.leadingAnchor.constraint(equalTo: headerImageView.leadingAnchor),
+            depiction.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             depiction.topAnchor.constraint(equalTo: packageContainer.bottomAnchor),
-            depiction.trailingAnchor.constraint(equalTo: headerImageView.trailingAnchor),
+            depiction.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             depiction.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
@@ -186,17 +215,21 @@ class NativePackageViewController: SileoViewController, PackageActions {
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
-        
+
         allowNavbarUpdates = true
         navigationController?.navigationBar._backgroundOpacity = 0
         navigationController?.navigationBar.tintColor = .white
+        navigationController?.view.backgroundColor = .clear
         statusBarStyle = .lightContent
         navigationItem.largeTitleDisplayMode = .never
         navigationController?.navigationBar.isTranslucent = true
+        navigationItem.titleView = packageNavBarIconViewController
         
         extendedLayoutIncludesOpaqueBars = true
         edgesForExtendedLayout = [.top, .bottom]
-        
+
+        scrollView.contentInsetAdjustmentBehavior = .never
+
         weak var weakSelf = self
         NotificationCenter.default.addObserver(weakSelf as Any,
                                                selector: #selector(updateSileoColors),
@@ -205,8 +238,31 @@ class NativePackageViewController: SileoViewController, PackageActions {
         
         navigationItem.rightBarButtonItems = [navBarShareButtonItem]
         
+        /*
+        if isModal {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: String(localizationKey: "Done"),
+                                                                    style: .done,
+                                                                    target: self,
+                                                                    action: #selector(NativePackageViewController.dismissImmediately))
+        }
+        */
         updateSileoColors()
         reloadPackage()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        let collapsed = splitViewController?.isCollapsed ?? false
+        let navController = collapsed ? (splitViewController?.viewControllers[0] as? UINavigationController) : navigationController
+        
+        allowNavbarUpdates = false
+        currentNavBarOpacity = navController?.navigationBar._backgroundOpacity ?? 1
+        
+        UIView.animate(withDuration: 0.8) {
+            navController?.navigationBar.tintColor = UINavigationBar.appearance().tintColor
+            navController?.navigationBar._backgroundOpacity = 1
+        }
     }
     
     private func reloadPackage() {
@@ -222,7 +278,7 @@ class NativePackageViewController: SileoViewController, PackageActions {
         if let headerURL = package.rawControl["header"],
            let header = URL(string: headerURL) {
             if header != depictionHeader {
-                if let image = AmyNetworkResolver.shared.image(header, { [weak self] refresh, image in
+                if let image = EvanderNetworking.shared.image(header, { [weak self] refresh, image in
                     guard let `self` = self,
                           refresh,
                           let image = image else { return }
@@ -235,46 +291,64 @@ class NativePackageViewController: SileoViewController, PackageActions {
             }
         } else {
             if var image = UIImage(named: "Background Placeholder") {
-                image = GifController.downsample(image: image) ?? image
+                image = ImageProcessing.downsample(image: image) ?? image
                 headerImageView.image = image
             }
         }
         if let depiction = package.nativeDepiction {
-            AmyNetworkResolver.dict(url: depiction, cache: true) { [weak self] refresh, dict in
+            EvanderNetworking.request(url: depiction, type: [String: Any].self) { [weak self] success, _, _, dict in
                 guard let `self` = self,
-                      refresh,
+                      success,
                       let dict = dict else { return }
                 DispatchQueue.main.async { [weak self] in
                     self?.depiction.setDepiction(dict: dict)
-                    NSLog("[Sileo] \(self?.depiction.bounds) \(self?.contentView.bounds) \(self?.scrollView.bounds)")
+                    self?.downloadButton.tintColor = self?.depiction.effectiveTintColor
+                    self?.downloadButton.updateStyle()
+                    self?.navBarDownloadButton.tintColor = self?.depiction.effectiveTintColor
+                    self?.navBarDownloadButton.updateStyle()
                 }
             }
         }
         if package.hasIcon(),
             let rawIcon = package.icon {
-            let image = AmyNetworkResolver.shared.image(rawIcon, size: packageIconView.frame.size) { [weak self] refresh, image in
+            let image = EvanderNetworking.shared.image(rawIcon, size: packageIconView.frame.size) { [weak self] refresh, image in
                 if refresh,
                     let strong = self,
                     let image = image,
                     strong.package.icon == rawIcon {
                         DispatchQueue.main.async {
                             strong.packageIconView.image = image
-                            //strong.packageNavBarIconView.image = image
+                            strong.packageNavBarIconView.image = image
                         }
                 }
             } ?? UIImage(named: "Tweak Icon")
             packageIconView.image = image
-            //packageNavBarIconView?.image = image
+            packageNavBarIconView.image = image
         }
         
         packageNameLabel.text = package.name
         authorLabel.text = ControlFileParser.authorName(string: package.author ?? "")
         downloadButton.package = package
     }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        self.statusBarStyle = .default
+        
+        self.navigationController?.navigationBar._backgroundOpacity = currentNavBarOpacity
+        self.navigationController?.navigationBar.tintColor = .white
+        allowNavbarUpdates = true
+        self.scrollViewDidScroll(self.scrollView)
+    }
 
     @objc func updateSileoColors() {
         depiction.theme = theme
         view.backgroundColor = .sileoBackgroundColor
+        downloadButton.tintColor = depiction.effectiveTintColor
+        downloadButton.updateStyle()
+        navBarDownloadButton.tintColor = depiction.effectiveTintColor
+        navBarDownloadButton.updateStyle()
     }
     
     override var previewActionItems: [UIPreviewActionItem] {
@@ -377,26 +451,107 @@ class NativePackageViewController: SileoViewController, PackageActions {
         sharePopup.view.tintColor = depiction.effectiveTintColor
         self.present(sharePopup, animated: true)
     }
+    
+    @objc func dismissImmediately() {
+        // Dismiss this view controller.
+        self.dismiss(animated: true, completion: nil)
+    }
 
 }
 
 extension NativePackageViewController: DepictionDelegate {
     
-    func openURL(_ url: URL, completionHandler: @escaping (Bool) -> Void) {
-        completionHandler(false)
+    func handleAction(action: DepictionAction) {
+        switch action {
+        case .openURL(url: let url, external: let external):
+            if !external {
+                UIApplication.shared.open(url)
+            } else {
+                let view = SFSafariViewController(url: url)
+                self.navigationController?.pushViewController(view, animated: true)
+            }
+            break
+        case .openDepiction(url: let url):
+            break
+        case .openPackage(bundle: let bundle):
+            break
+        case .addRepo(url: let url):
+            let delegate = UIApplication.shared.delegate as! SileoAppDelegate
+            if let tabBarController = delegate.window?.rootViewController as? UITabBarController,
+                let sourcesSVC = tabBarController.viewControllers?[2] as? UISplitViewController,
+                  let sourcesNavNV = sourcesSVC.viewControllers[0] as? SileoNavigationController {
+                  tabBarController.selectedViewController = sourcesSVC
+                  if let sourcesVC = sourcesNavNV.viewControllers[0] as? SourcesViewController {
+                    sourcesVC.presentAddSourceEntryField(url: url)
+                  }
+            }
+        case .custom(action: let action):
+            break
+        case .actionError(error: let error, action: let action):
+            depictionError(error: "\(error) for \(action)")
+        }
     }
     
-    func handleAction(action: String, external: Bool) {
-        
-    }
-    
-    func depictionError(error: Error) {
-        let alert = UIAlertController(title: "Error Loading Depiction",
-                                      message: error.localizedDescription,
-                                      preferredStyle: .alert)
+    func depictionError(error: String) {
+        let alert = UIAlertController(title: "Depiction Error", message: error, preferredStyle: .alert)
+        alert.view.tintColor = .tintColor
+        alert.addAction(UIAlertAction(title: String(localizationKey: "OK"), style: .default, handler: { _ in
+            alert.dismiss(animated: true)
+        }))
         self.present(alert, animated: true)
     }
+    
+    func packageView(for package: DepictionPackage) -> UIView {
+        let cell: PackageCollectionViewCell = Bundle.main.loadNibNamed("PackageCollectionViewCell", owner: self, options: nil)?[0] as! PackageCollectionViewCell
+        let action: PackageControlView = {
+            let action = PackageControlView()
+            action.backgroundColor = .clear
+            action.translatesAutoresizingMaskIntoConstraints = false
+            action.addTarget(self, action: #selector(didSelectPackage(_:)), for: .touchUpInside)
+            return action
+        }()
+        cell.contentView.addSubview(action)
+        cell.contentView.addConstraints([
+            action.topAnchor.constraint(equalTo: cell.contentView.topAnchor),
+            action.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor),
+            action.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor),
+            action.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor),
+        ])
+        cell.separatorView?.isHidden = true
+        let view = cell.contentView
+        view.heightAnchor.constraint(equalToConstant: 73).isActive = true
+        let packages = PackageListManager.shared.packages(identifiers: [package.identifier], sorted: false)
+        if packages.count == 1 {
+            cell.targetPackage = packages[0]
+            action.package = packages[0]
+        } else {
+            let provisional = ProvisionalPackage(package: package)
+            cell.provisionalTarget = provisional
+            action.package = CanisterResolver.package(provisional)
+        }
+        return view
+    }
+    
+    func image(for url: URL, completion: @escaping ((UIImage?) -> Void)) -> Bool {
+        if let image = EvanderNetworking.shared.image(url, cache: true, { refresh, image in
+            guard refresh,
+                  let image = image else { return }
+            completion(image)
+        }) {
+            completion(image)
+        }
+        return true
+    }
+    
+    @objc private func didSelectPackage(_ cell: PackageControlView) {
+        guard let package = cell.package else { return }
+        let viewController = NativePackageViewController.viewController(for: package)
+        self.navigationController?.pushViewController(viewController, animated: true)
+    }
+}
 
+@objc private class PackageControlView: UIControl {
+    public var package: Package?
 }
 
 extension NativePackageViewController: PackageQueueButtonDataProvider {
@@ -418,10 +573,16 @@ extension NativePackageViewController: PackageQueueButtonDataProvider {
                 DispatchQueue.main.async {
                     self?.isUpdatingPurchaseStatus = false
                     self?.downloadButton.paymentInfo = info
-                    //self.navBarDownloadButton?.paymentInfo = info
+                    self?.navBarDownloadButton.paymentInfo = info
                 }
             }
         }
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        self.scrollViewDidScroll(self.scrollView)
     }
 
 }
@@ -433,4 +594,122 @@ extension NativePackageViewController: MFMailComposeViewControllerDelegate {
         // Dismiss the mail compose view controller.
         self.dismiss(animated: true, completion: nil)
     }
+}
+
+extension NativePackageViewController: UIScrollViewDelegate {
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let headerBounds = headerImageView.bounds
+        /*
+        var aspectRatio = headerBounds.width / headerBounds.height
+        if headerBounds.height == 0 {
+            aspectRatio = 0
+        }
+        */
+        var offset = scrollView.contentOffset.y
+        if offset > 0 {
+            offset = 0
+        }
+        
+        // doing the magic on the nav bar "GET" button and package icon
+        let downloadButtonPos = downloadButton.convert(downloadButton.bounds, to: scrollView)
+        let container = CGRect(origin: CGPoint(x: scrollView.contentOffset.x,
+                                               y: scrollView.contentOffset.y + 106 - UIApplication.shared.statusBarFrame.height),
+                               size: scrollView.frame.size)
+        // TLDR: magic starts when scrolling out the lower half of the button so we don't have duplicated button too early
+        var navBarAlphaOffset = scrollView.contentOffset.y * 1.75 / headerImageViewHeightAnchor.constant
+        if headerImageViewHeightAnchor.constant == 0 {
+            navBarAlphaOffset = 0
+        }
+
+        if navBarAlphaOffset > 1 {
+            navBarAlphaOffset = 1
+        } else if navBarAlphaOffset < 0 {
+            navBarAlphaOffset = 0
+        }
+        
+        UIView.animate(withDuration: 0.3) { [weak self] in
+            guard let `self` = self else { return }
+            self.shareButton.alpha = 1 - navBarAlphaOffset
+
+            if (self.shareButton.alpha ) > 0 {
+                self.packageNavBarIconView.alpha = 0
+            } else {
+                self.packageNavBarIconView.alpha = downloadButtonPos.intersects(container) ? 0 : 1
+            }
+            self.navBarDownloadButton.customAlpha = self.packageNavBarIconView.alpha
+
+            if (self.shareButton.alpha) > 0 {
+                self.navigationItem.rightBarButtonItems = [self.navBarShareButtonItem]
+            } else {
+                self.navigationItem.rightBarButtonItems = [self.navBarDownloadButtonItem]
+            }
+        }
+        
+        scrollView.scrollIndicatorInsets.top = max(headerBounds.maxY - scrollView.contentOffset.y, self.view.safeAreaInsets.top)
+        
+        guard allowNavbarUpdates else {
+            return
+        }
+        let collapsed = splitViewController?.isCollapsed ?? false
+        let navController = collapsed ? (splitViewController?.viewControllers[0] as? UINavigationController) : self.navigationController
+        navController?.setNavigationBarHidden(false, animated: true)
+        if navBarAlphaOffset < 1 {
+            var tintColor = self.depiction.effectiveTintColor
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            tintColor.getRed(&red, green: &green, blue: &blue, alpha: nil)
+
+            if UIAccessibility.isInvertColorsEnabled {
+                red -= red * (1.0 - navBarAlphaOffset)
+                green -= green * (1.0 - navBarAlphaOffset)
+                blue -= blue * (1.0 - navBarAlphaOffset)
+            } else {
+                red += (1.0 - red) * (1.0 - navBarAlphaOffset)
+                green += (1.0 - green) * (1.0 - navBarAlphaOffset)
+                blue += (1.0 - blue) * (1.0 - navBarAlphaOffset)
+            }
+            tintColor = UIColor(red: red, green: green, blue: blue, alpha: 1)
+
+            navController?.navigationBar.tintColor = tintColor
+            navController?.navigationBar._backgroundOpacity = navBarAlphaOffset
+            if navBarAlphaOffset < 0.75 {
+                self.statusBarStyle = .lightContent
+            } else {
+                self.statusBarStyle = .default
+            }
+        } else {
+            navController?.navigationBar.tintColor = self.depiction.effectiveTintColor
+            navController?.navigationBar._backgroundOpacity = 1
+            self.statusBarStyle = .default
+        }
+        self.setNeedsStatusBarAppearanceUpdate()
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        // for those wondering about the magic numbers and what's going on here:
+        // This is the spring effect on scrolling (aka step to start or step to after header
+        // 113 = header imageView height - nav bar height and 56 is simply for setitng the step boundary, aka halfway
+        // if you don't like this, we can implement the variables from above, instead, but imo it's a waste of time
+        let scrollViewOffset = scrollView.contentOffset.y + UIApplication.shared.statusBarFrame.height
+        
+        if scrollViewOffset < 66 {
+            scrollView.setContentOffset(.zero, animated: true)
+        } else if scrollViewOffset > 66 && scrollViewOffset < 133 {
+            scrollView.setContentOffset(CGPoint(x: 0, y: 156 - UIApplication.shared.statusBarFrame.height), animated: true)
+        }
+    }
+}
+
+extension NativePackageViewController {
+    
+    public var isModal: Bool {
+        let presentingIsModal = presentingViewController != nil
+        let presentingIsNavigation = navigationController?.presentingViewController?.presentedViewController == navigationController
+        let presentingIsTabBar = tabBarController?.presentingViewController is UITabBarController
+
+        return presentingIsModal || presentingIsNavigation || presentingIsTabBar
+    }
+
 }
