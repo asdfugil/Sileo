@@ -30,8 +30,8 @@ jobs:
           sudo gtar -xkf ./Toolchain12_5.tzst -C /Applications/Xcode_12.4.app/Contents/Developer/Toolchains
           sudo gtar --preserve-permissions -xkf ./bootstrap_darwin-amd64.tar.zst -C /
           echo '/opt/procursus/sbin:/opt/procursus/bin' >> $GITHUB_PATH
+          sed -i '' 's/apt.procurs.us/procursus.itsnebula.net/' /opt/procursus/etc/apt/sources.list.d/procursus.sources
           PATH=/opt/procursus/sbin:/opt/procursus/bin:$PATH sudo /opt/procursus/bin/apt update
-          sed -i 's/apt.procurs.us/procursus.itsnebula.net/' /opt/procursus/etc/apt/sources.list.d/procursus.sources
           sudo /opt/procursus/bin/apt -V dist-upgrade -y || :
           sudo /opt/procursus/bin/apt -V dist-upgrade -y
           sudo /opt/procursus/bin/apt install ldid -y
