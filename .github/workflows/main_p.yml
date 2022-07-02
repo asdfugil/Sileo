@@ -32,7 +32,7 @@ jobs:
           PATH=/opt/procursus/sbin:/opt/procursus/bin:$PATH sudo /opt/procursus/bin/apt update
           sudo /opt/procursus/bin/apt -V dist-upgrade -y || :
           sudo /opt/procursus/bin/apt -V dist-upgrade -y
-          sudo /opt/procursus/bin/apt install ldid -y
+          sudo /opt/procursus/bin/apt install ldid make -y
           
       - name: Add Procursus to PATH
         run: |
@@ -53,13 +53,13 @@ jobs:
 
       - name: Build Sileo Nightly (iphoneos-arm)
         run: |
-          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1
+          gmake -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1
       - name: Build Sileo Nightly (darwin-amd64)
         run: |
-          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
+          gmake -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
       - name: Build Sileo Nightly (darwin-arm64)
         run: |
-          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
+          gmake -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
 
       - name: Upload to GitHub Artifiacts
         uses: actions/upload-artifact@v2.2.2
