@@ -6058,7 +6058,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/elihwyma/Alderis";
 			requirement = {
-				branch = "spm-fixes";
+				branch = master;
 				kind = branch;
 			};
 		};
