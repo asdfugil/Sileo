@@ -49,7 +49,6 @@ jobs:
 
       - name: Select Correct Xcode (13.4.1)
         run: |
-          rm -f Sileo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           sudo xcode-select --switch /Applications/Xcode_13.4.1.app
 
       - name: Build Sileo Nightly (iphoneos-arm)
