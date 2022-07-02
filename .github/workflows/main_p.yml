@@ -49,17 +49,18 @@ jobs:
 
       - name: Select Correct Xcode (13.4.1)
         run: |
+          rm -f Sileo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           sudo xcode-select --switch /Applications/Xcode_13.4.1.app
 
       - name: Build Sileo Nightly (iphoneos-arm)
         run: |
-          make clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1
+          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1
       - name: Build Sileo Nightly (darwin-amd64)
         run: |
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
+          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
       - name: Build Sileo Nightly (darwin-arm64)
         run: |
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
+          make -j$(sysctl -n hw.ncpu) clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
 
       - name: Upload to GitHub Artifiacts
         uses: actions/upload-artifact@v2.2.2
